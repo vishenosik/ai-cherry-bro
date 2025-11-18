@@ -1,0 +1,11 @@
+version: "3"
+
+dotenv: ['.env']
+
+tasks:
+
+  # RUN
+
+  run-local:
+    desc: Run main application
+    cmd: go run ./cmd/browser-agent
