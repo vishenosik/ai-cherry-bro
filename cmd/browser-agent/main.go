@@ -9,9 +9,12 @@ import (
 	"time"
 
 	"github.com/vishenosik/ai-cherry-bro/internal/agent/browser"
+	"github.com/vishenosik/ai-cherry-bro/internal/api"
+	"github.com/vishenosik/ai-cherry-bro/internal/usecase"
 	"github.com/vishenosik/gocherry"
 
 	_ctx "github.com/vishenosik/gocherry/pkg/context"
+	"github.com/vishenosik/gocherry/pkg/grpc"
 	"github.com/vishenosik/gocherry/pkg/logs"
 )
 
@@ -58,7 +61,11 @@ func NewApp(ctx context.Context) (*gocherry.App, error) {
 
 	// USECASES
 
+	taskProvider := usecase.NewTaskProvider(nil)
+
 	// API
+
+	bsa := api.NewBrowserServiceApi(taskProvider)
 
 	// AGENTS
 
@@ -67,12 +74,27 @@ func NewApp(ctx context.Context) (*gocherry.App, error) {
 		return nil, err
 	}
 
+	// SERVICES
+
+	grpcServer, err := grpc.NewGrpcServer(
+		grpc.GrpcServices{
+			bsa,
+		},
+		grpc.WithLogInterceptors(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// INIT
+
 	app, err := gocherry.NewApp()
 	if err != nil {
 		return nil, err
 	}
 
 	app.AddServices(
+		grpcServer,
 		browserAgent,
 	)
 

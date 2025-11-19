@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package browser_task.v1;
+option go_package = "github.com/vishenosik/ai-cherry-bro;browser_task_v1";
+
+service BrowserTaskService {
+    rpc NewTask(NewTaskReq) returns(NewTaskResp);
+}
+
+message NewTaskReq {
+    string task_text = 1;
+}
+
+message NewTaskResp {
+    string task_id = 1;
+}

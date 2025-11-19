@@ -9,3 +9,11 @@ tasks:
   run-local:
     desc: Run main application
     cmd: go run ./cmd/browser-agent
+
+  # GEN
+
+  go-generate-grpc-api:
+    desc: Generate golang gRPC client/server from proto files
+    aliases: [go-gen-grpc]
+    silent: true
+    cmd: ./scripts/generate.go.sh ./gen/grpc ./protos
