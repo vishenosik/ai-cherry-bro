@@ -8,8 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vishenosik/ai-cherry-bro/internal/agent/ai"
 	"github.com/vishenosik/ai-cherry-bro/internal/agent/browser"
+	"github.com/vishenosik/ai-cherry-bro/internal/agent/core"
 	"github.com/vishenosik/ai-cherry-bro/internal/api"
+	_context "github.com/vishenosik/ai-cherry-bro/internal/context"
+	"github.com/vishenosik/ai-cherry-bro/internal/security"
 	"github.com/vishenosik/ai-cherry-bro/internal/usecase"
 	"github.com/vishenosik/gocherry"
 
@@ -65,7 +69,7 @@ func NewApp(ctx context.Context) (*gocherry.App, error) {
 
 	// API
 
-	bsa := api.NewBrowserServiceApi(taskProvider)
+	bsApi := api.NewBrowserServiceApi(taskProvider)
 
 	// AGENTS
 
@@ -78,9 +82,28 @@ func NewApp(ctx context.Context) (*gocherry.App, error) {
 
 	grpcServer, err := grpc.NewGrpcServer(
 		grpc.GrpcServices{
-			bsa,
+			bsApi,
 		},
 		grpc.WithLogInterceptors(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO
+
+	aiClient := ai.NewClient()
+	contextManager := _context.NewManager(8000) // 8K токенов контекста
+	securityLayer := security.NewLayer()
+
+	// CORE
+
+	orch, err := core.NewOrchestrator(
+		browserAgent,
+		aiClient,
+		contextManager,
+		securityLayer,
+		taskProvider.TasksChan(),
 	)
 	if err != nil {
 		return nil, err
@@ -96,6 +119,7 @@ func NewApp(ctx context.Context) (*gocherry.App, error) {
 	app.AddServices(
 		grpcServer,
 		browserAgent,
+		orch,
 	)
 
 	return app, nil
