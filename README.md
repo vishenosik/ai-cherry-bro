@@ -14,3 +14,23 @@ go run github.com/playwright-community/playwright-go/cmd/playwright@v0.xxxx.x in
 go install github.com/playwright-community/playwright-go/cmd/playwright@v0.xxxx.x
 playwright install --with-deps
 ```
+
+# run
+
+Setup .env config with your credentials
+
+```toml
+OPENAI_API_KEY=your_openai_api_key
+```
+
+Run 
+
+```bash
+go run cmd/browser-agent/main.go
+```
+
+# requests
+
+There is a gRPC simple API you can explore in `protos/v1/browser_task.proto`
+
+I recommend using postman to do that.
