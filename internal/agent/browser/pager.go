@@ -2,7 +2,7 @@ package browser
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 
 type Pager struct {
 	page playwright.Page
+	log  *slog.Logger
 }
 
 func (p *Pager) Close() error {
@@ -22,7 +23,7 @@ func (p *Pager) Navigate(url string) error {
 		url = "https://" + url
 	}
 
-	log.Printf("🌐 Navigating to: %s", url)
+	p.log.Info("Navigating to " + url)
 	_, err := p.page.Goto(url, playwright.PageGotoOptions{
 		Timeout:   playwright.Float(30000),
 		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
@@ -31,7 +32,7 @@ func (p *Pager) Navigate(url string) error {
 }
 
 func (p *Pager) ClickElement(description string) error {
-	log.Printf("🖱️ Attempting to click: %s", description)
+	p.log.Info("🖱️ Attempting to click " + description)
 
 	// Ищем элемент по тексту
 	element, err := p.findElementByText(description)
@@ -50,12 +51,12 @@ func (p *Pager) ClickElement(description string) error {
 		return fmt.Errorf("click failed: %v", err)
 	}
 
-	log.Printf("✅ Successfully clicked: %s", description)
+	p.log.Info("Successfully clicked " + description)
 	return nil
 }
 
 func (p *Pager) TypeText(description, text string) error {
-	log.Printf("⌨️ Typing in %s: %s", description, text)
+	p.log.Info(fmt.Sprintf("⌨️ Typing in %s: %s", description, text))
 
 	element, err := p.findElementByText(description)
 	if err != nil {
@@ -70,18 +71,18 @@ func (p *Pager) TypeText(description, text string) error {
 		return fmt.Errorf("typing failed: %v", err)
 	}
 
-	log.Printf("✅ Successfully typed in: %s", description)
+	p.log.Info("Successfully typed in " + description)
 	return nil
 }
 
 func (p *Pager) ScrollPage() error {
-	log.Printf("📜 Scrolling page")
+	p.log.Info("Scrolling page")
 	_, err := p.page.Evaluate("window.scrollBy(0, 500)")
 	return err
 }
 
 func (p *Pager) Wait(seconds int) {
-	log.Printf("⏳ Waiting %d seconds", seconds)
+	p.log.Info(fmt.Sprintf("Waiting %d seconds", seconds))
 	time.Sleep(time.Duration(seconds) * time.Second)
 }
 

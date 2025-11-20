@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"strings"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/vishenosik/ai-cherry-bro/internal/agent/ai"
 	_ctx "github.com/vishenosik/ai-cherry-bro/internal/context"
 	"github.com/vishenosik/ai-cherry-bro/internal/entity"
-	"github.com/vishenosik/ai-cherry-bro/internal/security"
 	"github.com/vishenosik/concurrency"
 	"github.com/vishenosik/gocherry/pkg/logs"
 )
@@ -35,12 +33,25 @@ type AiClient interface {
 	Call(messages []entity.AiMessage) (*entity.AiResponse, error)
 }
 
+type ContextManager interface {
+	AddToHistory(action string)
+	CheckAuthRequired(task string, currentURL string) bool
+	ClearHistory()
+	GetAuthState(domain string) *_ctx.AuthState
+	GetHistory() string
+	UpdateAuthState(url string, isLoggedIn bool, username string)
+}
+
+type Security interface {
+	CheckAction(action string, target string, reasoning string) bool
+}
+
 type Orchestrator struct {
 	browser        Browser
 	page           Page
-	aiClient       *ai.Client
-	contextManager *_ctx.Manager
-	securityLayer  *security.Layer
+	aiClient       AiClient
+	contextManager ContextManager
+	securityLayer  Security
 	isRunning      bool
 	currentTask    string
 	maxSteps       int
@@ -52,9 +63,9 @@ type Orchestrator struct {
 
 func NewOrchestrator(
 	browser Browser,
-	aiClient *ai.Client,
-	contextManager *_ctx.Manager,
-	securityLayer *security.Layer,
+	aiClient AiClient,
+	contextManager ContextManager,
+	securityLayer Security,
 	subscriptions ...chan entity.PoolTask,
 ) (*Orchestrator, error) {
 
@@ -98,48 +109,46 @@ func (o *Orchestrator) RunTask(task string) {
 	o.currentTask = task
 	o.isRunning = true
 
-	fmt.Printf("🎯 Starting task: %s\n", task)
-	fmt.Printf("📝 Maximum steps: %d\n", o.maxSteps)
+	o.log.Info("starting task",
+		slog.String("task", task),
+		slog.Int("max_steps", o.maxSteps),
+	)
 
 	for step := 1; step <= o.maxSteps && o.isRunning; step++ {
-		fmt.Printf("\n--- Step %d ---\n", step)
 
 		// Получаем текущее состояние страницы
 		pageState, err := o.page.ExtractPageState()
 		if err != nil {
-			log.Printf("❌ Failed to extract page state: %v", err)
+			o.log.Error("Failed to extract page state", logs.Error(err))
 			break
 		}
-
-		// Получаем историю действий
-		history := o.contextManager.GetHistory()
 
 		// Решаем следующее действие
-		action, err := o.decideNextAction(task, pageState, history)
+		action, err := o.decideNextAction(task, pageState, o.contextManager.GetHistory())
 		if err != nil {
-			log.Printf("❌ Failed to decide action: %v", err)
+			o.log.Error("failed to decide action", logs.Error(err))
 			break
 		}
 
-		fmt.Printf("🤔 Reasoning: %s\n", action.Reasoning)
-		fmt.Printf("⚡ Action: %s", action.Action)
-		if action.Target != "" {
-			fmt.Printf(" -> %s", action.Target)
-		}
-		if action.Text != "" {
-			fmt.Printf(" (text: %s)", action.Text)
-		}
-		fmt.Println()
+		log := o.log.With(
+			slog.String("action", action.Action),
+			slog.String("target", action.Target),
+		)
+
+		log.Info("acting",
+			slog.Int("step", step),
+			slog.String("reasoning", action.Reasoning),
+		)
 
 		// Проверка безопасности для чувствительных действий
 		if !o.securityLayer.CheckAction(action.Action, action.Target, action.Reasoning) {
-			fmt.Println("❌ Action cancelled by user")
+			log.Error("action cancelled by user")
 			break
 		}
 
 		// Выполняем действие
 		if err := o.executeAction(action); err != nil {
-			log.Printf("❌ Action failed: %v", err)
+			log.Error("action failed", logs.Error(err))
 
 			// Пробуем восстановиться
 			if !o.handleError(err, action) {
@@ -152,7 +161,7 @@ func (o *Orchestrator) RunTask(task string) {
 
 		// Проверяем завершение
 		if action.Completed {
-			fmt.Println("✅ Task completed successfully!")
+			o.log.Info("task completed successfully")
 			break
 		}
 
@@ -160,7 +169,7 @@ func (o *Orchestrator) RunTask(task string) {
 		time.Sleep(2 * time.Second)
 
 		if step == o.maxSteps {
-			fmt.Println("⚠️ Maximum steps reached. Task may not be complete.")
+			o.log.Warn("maximum steps reached. task may not be complete")
 		}
 	}
 
@@ -169,7 +178,7 @@ func (o *Orchestrator) RunTask(task string) {
 
 func (o *Orchestrator) decideNextAction(task, pageState, history string) (*entity.AiResponse, error) {
 	messages := ai.BuildDecisionPrompt(task, pageState, history)
-	return o.aiClient.CallAI(messages)
+	return o.aiClient.Call(messages)
 }
 
 func (o *Orchestrator) executeAction(action *entity.AiResponse) error {
@@ -192,26 +201,32 @@ func (o *Orchestrator) executeAction(action *entity.AiResponse) error {
 	}
 }
 
-func (o *Orchestrator) handleError(err error, failedAction *entity.AiResponse) bool {
+func (o *Orchestrator) handleError(
+	err error,
+	_ *entity.AiResponse,
+) bool {
 	errorMsg := err.Error()
-	fmt.Printf("🔄 Handling error: %s\n", errorMsg)
+	o.log.Warn("handling error", logs.Error(err))
 
 	// Стратегии восстановления
 	switch {
 	case strings.Contains(errorMsg, "element not found"):
-		fmt.Println("🔍 Element not found, trying to scroll...")
+		o.log.Error("Element not found, trying to scroll...")
 		o.page.ScrollPage()
 		return true
+
 	case strings.Contains(errorMsg, "not visible"):
-		fmt.Println("👀 Element not visible, scrolling to view...")
+		o.log.Error("Element not visible, scrolling to view...")
 		o.page.ScrollPage()
 		return true
+
 	case strings.Contains(errorMsg, "navigation"):
-		fmt.Println("🌐 Navigation issue, waiting...")
+		o.log.Error("Navigation issue, waiting...")
 		o.page.Wait(5)
 		return true
+
 	default:
-		fmt.Println("❌ Unrecoverable error")
+		o.log.Error("❌ Unrecoverable error")
 		return false
 	}
 }

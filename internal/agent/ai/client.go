@@ -74,7 +74,7 @@ func NewOpenAIClient(apiKey, model string) *Client {
 	}
 }
 
-func (c *Client) CallAI(messages []entity.AiMessage) (*entity.AiResponse, error) {
+func (c *Client) Call(messages []entity.AiMessage) (*entity.AiResponse, error) {
 	request := ChatRequest{
 		Model:       c.model,
 		Messages:    messages,

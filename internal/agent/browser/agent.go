@@ -3,16 +3,19 @@ package browser
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 
 	"github.com/playwright-community/playwright-go"
 	"github.com/vishenosik/ai-cherry-bro/internal/agent/core"
+	"github.com/vishenosik/gocherry/pkg/logs"
 )
 
 type BrowserAgent struct {
 	pw      *playwright.Playwright
 	browser playwright.Browser
 	context playwright.BrowserContext
+	log     *slog.Logger
 
 	isRunning atomic.Bool
 }
@@ -24,7 +27,8 @@ func NewBrowserAgent() (*BrowserAgent, error) {
 	}
 
 	ba := &BrowserAgent{
-		pw: pw,
+		pw:  pw,
+		log: logs.SetupLogger().With(logs.AppComponent("browser")),
 	}
 
 	// Запускаем видимый браузер
@@ -73,37 +77,6 @@ func (ba *BrowserAgent) NewPage() (core.Page, error) {
 
 	return &Pager{
 		page: page,
+		log:  ba.log,
 	}, nil
-}
-
-func (ba *BrowserAgent) Test(ctx context.Context) error {
-	page, err := ba.context.NewPage()
-	if err != nil {
-		return fmt.Errorf("could not create page: %v", err)
-	}
-
-	if _, err = page.Goto("https://news.ycombinator.com"); err != nil {
-		return fmt.Errorf("could not goto: %v", err)
-	}
-
-	entries, err := page.Locator(".athing").All()
-	if err != nil {
-		return fmt.Errorf("could not get entries: %v", err)
-	}
-
-	for i, entry := range entries {
-		title, err := entry.Locator("td.title > span > a").TextContent()
-		if err != nil {
-			return fmt.Errorf("could not get text content: %v", err)
-		}
-		fmt.Printf("%d: %s\n", i+1, title)
-	}
-
-	err = page.Locator(".pagetop > a", playwright.PageLocatorOptions{
-		HasText: "jobs",
-	}).Click()
-	if err != nil {
-		return fmt.Errorf("could not get entries: %v", err)
-	}
-	return nil
 }

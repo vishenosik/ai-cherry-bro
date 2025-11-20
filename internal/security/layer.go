@@ -18,6 +18,7 @@ func NewLayer() *Layer {
 			"delete", "remove", "cancel", "unsubscribe",
 			"confirm", "submit", "send", "post", "publish",
 			"transfer", "withdraw", "install", "download",
+			"auth",
 		},
 	}
 }
