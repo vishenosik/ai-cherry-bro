@@ -1,13 +1,16 @@
 package core
 
 import (
+	"bufio"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/vishenosik/ai-cherry-bro/internal/agent/ai"
 	_ctx "github.com/vishenosik/ai-cherry-bro/internal/context"
 	"github.com/vishenosik/ai-cherry-bro/internal/entity"
@@ -195,6 +198,27 @@ func (o *Orchestrator) executeAction(action *entity.AiResponse) error {
 		o.page.Wait(3)
 		return nil
 	case "complete":
+		return nil
+	case "wait_user":
+		o.log.Info("waiting for user interaction")
+
+		fmt.Printf("\n🚨 AUTHENTICATION REQUIRED 🚨\n")
+		fmt.Printf("Reason: %s\n", action.Reasoning)
+		fmt.Printf("Current URL: %s\n", action.URL)
+		fmt.Printf("\nPlease manually authenticate in the browser and then:\n")
+		fmt.Printf("1. Complete the login process\n")
+		fmt.Printf("2. Return to the relevant page\n")
+		fmt.Printf("3. Press Enter here to continue...\n\n")
+		fmt.Print("Do you want to proceed? (y/n): ")
+
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+			response := strings.TrimSpace(scanner.Text())
+			if strings.ToLower(response) == "y" {
+				return nil
+			}
+			return errors.New("user didn't authenticate")
+		}
 		return nil
 	default:
 		return fmt.Errorf("unknown action: %s", action.Action)
